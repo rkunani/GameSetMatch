@@ -1,2 +1,4 @@
 .ipynb_checkpoints/
 .DS_Store
+cleaned_data.hdf
+data_legend.png
