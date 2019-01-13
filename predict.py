@@ -240,4 +240,6 @@ def predict_outcome(player1, player2):
     print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
     decide_winner(player1, player2, p1_win_prob, p2_win_prob)
 
-predict_outcome("Roger Federer", "Rafael Nadal")
+player1 = sys.argv[1]
+player2 = sys.argv[2]
+predict_outcome(player1, player2)
