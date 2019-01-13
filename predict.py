@@ -4,6 +4,8 @@ import numpy as np
 import sklearn.linear_model as lm 
 from pathlib import Path 
 import re
+import warnings
+warnings.filterwarnings("ignore")
 
 #####################
 ### DATA CLEANING ###
@@ -16,7 +18,8 @@ def clean_data(data):
         data.drop(drop_cols, axis=1, inplace=True)
     missing_match_stats = data[data['w_ace'].isnull()]
     data.drop(missing_match_stats.index, axis=0, inplace=True)
-    data['tourney_date'] = pd.to_datetime(data['tourney_date'].apply(lambda date: str(date)))
+    #data['tourney_date'] = pd.to_datetime(data['tourney_date'].apply(lambda date: str(date)))
+    data['tourney_date'] = pd.to_datetime(data['tourney_date'])
     return data
 
 ###########################
@@ -227,16 +230,20 @@ def decide_winner(player1, player2, p1_win_prob, p2_win_prob):
 
 def predict_outcome(player1, player2):
     """Predicts the outcome of a match between PLAYER1 and PLAYER2"""
-    all_training_data = pd.read_csv(Path('./data/jeff_sackman_data/atp_matches_2017.csv')) # train on 2017 data
+    data_2017 = pd.read_csv(Path('./data/jeff_sackman_data/atp_matches_2017.csv'))
+    data_2016 = pd.read_csv(Path('./data/jeff_sackman_data/atp_matches_2016.csv'))
+    all_training_data = data_2017  #pd.concat([data_2017, data_2016])
     p1_model = compute_model(all_training_data, player1)
     player1_estimates = [get_estimate(all_training_data, stat, player1) for stat in features[:7]]
     player2_estimates = [get_estimate(all_training_data, stat, player2) for stat in features[:7]]
     player1_features = player1_estimates + player2_estimates + [win_streak(all_training_data, player1)] + [head_to_head(all_training_data, player1, player2)]
-    p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][0]
+    p1_pred = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))
+    p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
     print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
     p2_model = compute_model(all_training_data, player2)
     player2_features = player2_estimates + player1_estimates + [win_streak(all_training_data, player2)] + [head_to_head(all_training_data, player2, player1)]
-    p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][0]
+    p2_pred = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))
+    p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][1]
     print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
     decide_winner(player1, player2, p1_win_prob, p2_win_prob)
 
