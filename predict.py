@@ -206,6 +206,22 @@ def make_train_matrix(data, player, test=False):
 ### PREDICTION ###
 ##################
 
+def get_training_data(start, end=2018, years=None):
+    """Puts ATP match data from year START to year END in a DataFrame."""
+    print("Getting training data")
+    data = []
+    if years:
+        for year in years:
+            year_string = str(year)
+            data.append(pd.read_csv(Path(f'./data/jeff_sackman_data/atp_matches_{year_string}.csv')))
+        return pd.concat(data)
+    else:
+        for year in range(start, end+1):
+            year_string = str(year)
+            data.append(pd.read_csv(Path(f'./data/jeff_sackman_data/atp_matches_{year_string}.csv')))
+        return pd.concat(data)
+
+
 def compute_model(data, player):
     """Trains a model for PLAYER."""
     print(f"Computing model for {player}")
@@ -230,23 +246,25 @@ def decide_winner(player1, player2, p1_win_prob, p2_win_prob):
 
 def predict_outcome(player1, player2):
     """Predicts the outcome of a match between PLAYER1 and PLAYER2"""
-    data_2017 = pd.read_csv(Path('./data/jeff_sackman_data/atp_matches_2017.csv'))
-    data_2016 = pd.read_csv(Path('./data/jeff_sackman_data/atp_matches_2016.csv'))
-    all_training_data = data_2017  #pd.concat([data_2017, data_2016])
+    all_training_data = get_training_data(start_year, end=end_year)
     p1_model = compute_model(all_training_data, player1)
     player1_estimates = [get_estimate(all_training_data, stat, player1) for stat in features[:7]]
     player2_estimates = [get_estimate(all_training_data, stat, player2) for stat in features[:7]]
     player1_features = player1_estimates + player2_estimates + [win_streak(all_training_data, player1)] + [head_to_head(all_training_data, player1, player2)]
-    p1_pred = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))
     p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
     print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
     p2_model = compute_model(all_training_data, player2)
     player2_features = player2_estimates + player1_estimates + [win_streak(all_training_data, player2)] + [head_to_head(all_training_data, player2, player1)]
-    p2_pred = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))
     p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][1]
     print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
     decide_winner(player1, player2, p1_win_prob, p2_win_prob)
 
 player1 = sys.argv[1]
 player2 = sys.argv[2]
+if len(sys.argv) > 3:
+    start_year = int(sys.argv[3])
+    end_year = 2018
+    if len(sys.argv) > 4:
+        end_year = int(sys.argv[4])
+
 predict_outcome(player1, player2)
