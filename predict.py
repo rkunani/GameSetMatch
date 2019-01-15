@@ -159,6 +159,8 @@ def head_to_head(data, player1, player2):
     h2h_matches = player_data[(player_data['winner_name'] == player2) | (player_data['loser_name'] == player2)]
     total_matches = h2h_matches.shape[0]
     player_wins = h2h_matches[h2h_matches['winner_name'] == player1].shape[0]
+    if total_matches == 0:
+        return 0
     return player_wins/total_matches
 
 def win_streak(data, player):
@@ -208,7 +210,7 @@ def make_train_matrix(data, player, test=False):
 
 def get_training_data(start, end=2018, years=None):
     """Puts ATP match data from year START to year END in a DataFrame."""
-    print("Getting training data")
+    #print("Getting training data")
     data = []
     if years:
         for year in years:
@@ -224,7 +226,7 @@ def get_training_data(start, end=2018, years=None):
 
 def compute_model(data, player):
     """Trains a model for PLAYER."""
-    print(f"Computing model for {player}")
+    #print(f"Computing model for {player}")
     train_matrix, results = make_train_matrix(data, player, True)
     model = lm.LogisticRegression(penalty='l2', C=1.0, fit_intercept=True, multi_class='ovr')
     model.fit(train_matrix, results)
@@ -234,37 +236,44 @@ def decide_winner(player1, player2, p1_win_prob, p2_win_prob):
     """Decides whether PLAYER1 ir PLAYER2 will win given their win probabilities."""
     if p1_win_prob >= .5 and p2_win_prob < 0.5:
         print(f"{player1} will defeat {player2}.")
+        return player1
     elif p2_win_prob >= .5 and p1_win_prob < 0.5:
         print(f"{player2} will defeat {player1}.")
+        return player2
     elif p1_win_prob == p2_win_prob:
         print("Both players have an equal chance of winning against the other. This program cannot decide a winner.")
+        return
     else:
         if max(p1_win_prob, p2_win_prob) == p1_win_prob:
             print(f"{player1} will defeat {player2}.")
+            return player1
         else:
             print(f"{player2} will defeat {player1}.")
+            return player2
 
-def predict_outcome(player1, player2):
+def predict_outcome(training_data, player1, player2, start_year, end_year):
     """Predicts the outcome of a match between PLAYER1 and PLAYER2"""
-    all_training_data = get_training_data(start_year, end=end_year)
-    p1_model = compute_model(all_training_data, player1)
-    player1_estimates = [get_estimate(all_training_data, stat, player1) for stat in features[:7]]
-    player2_estimates = [get_estimate(all_training_data, stat, player2) for stat in features[:7]]
-    player1_features = player1_estimates + player2_estimates + [win_streak(all_training_data, player1)] + [head_to_head(all_training_data, player1, player2)]
-    p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
-    print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
-    p2_model = compute_model(all_training_data, player2)
-    player2_features = player2_estimates + player1_estimates + [win_streak(all_training_data, player2)] + [head_to_head(all_training_data, player2, player1)]
-    p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][1]
-    print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
-    decide_winner(player1, player2, p1_win_prob, p2_win_prob)
+    try:
+        p1_model = compute_model(training_data, player1)
+        player1_estimates = [get_estimate(training_data, stat, player1) for stat in features[:7]]
+        player2_estimates = [get_estimate(training_data, stat, player2) for stat in features[:7]]
+        player1_features = player1_estimates + player2_estimates + [win_streak(training_data, player1)] + [head_to_head(training_data, player1, player2)]
+        p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
+        print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
+        p2_model = compute_model(training_data, player2)
+        player2_features = player2_estimates + player1_estimates + [win_streak(training_data, player2)] + [head_to_head(training_data, player2, player1)]
+        p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][1]
+        print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
+        return decide_winner(player1, player2, p1_win_prob, p2_win_prob)
+    except ValueError: # The training data does not capture both wins and losses for either PLAYER1 or PLAYER2
+        print(f"There is not sufficient data to predict the outcome of the match between {player1} and {player2}")
 
-player1 = sys.argv[1]
-player2 = sys.argv[2]
-if len(sys.argv) > 3:
-    start_year = int(sys.argv[3])
-    end_year = 2018
-    if len(sys.argv) > 4:
-        end_year = int(sys.argv[4])
-
-predict_outcome(player1, player2)
+if __name__ == "__main__":
+    player1 = sys.argv[1]
+    player2 = sys.argv[2]
+    if len(sys.argv) > 3:
+        start_year = int(sys.argv[3])
+        end_year = 2018
+        if len(sys.argv) > 4:
+            end_year = int(sys.argv[4])
+    predict_outcome(get_training_data(start_year, end=end_year), player1, player2, start_year, end_year)
