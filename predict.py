@@ -143,6 +143,7 @@ def add_player_v_opponent_stats(data, player):
     return data
 
 def add_player_v_opponent_rankings(data, player):
+    """Adds columns to DATA containing the rankings for PLAYER and the opponent."""
     player_ranks = []
     opp_ranks = []
     for i in range(data.shape[0]):
@@ -182,7 +183,6 @@ def win_streak(data, player):
     player_data = get_matches_for_player(data, player)
     player_data.sort_values(by=['tourney_date', 'match_num'], inplace=True)
     results = player_data.pipe(add_win_loss, (player))['result']
-    #print(results)
     return compute_win_streak(results)
 
 def get_ranking(training_data, rankings, player):
@@ -235,7 +235,6 @@ def make_train_matrix(data, player, test=False):
 
 def get_training_data(start, end=2018, years=None):
     """Puts ATP match data from year START to year END in a DataFrame."""
-    #print("Getting training data")
     data = []
     if years:
         for year in years:
@@ -251,14 +250,13 @@ def get_training_data(start, end=2018, years=None):
 
 def compute_model(data, player):
     """Trains a model for PLAYER."""
-    #print(f"Computing model for {player}")
     train_matrix, results = make_train_matrix(data, player, True)
     model = lm.LogisticRegression(penalty='l2', C=1.0, fit_intercept=True, multi_class='ovr')
     model.fit(train_matrix, results)
     return model
 
 def decide_winner(player1, player2, p1_win_prob, p2_win_prob):
-    """Decides whether PLAYER1 ir PLAYER2 will win given their win probabilities."""
+    """Decides whether PLAYER1 or PLAYER2 will win given their win probabilities."""
     if p1_win_prob >= .5 and p2_win_prob < 0.5:
         print(f"{player1} will defeat {player2}.")
         return player1
@@ -285,7 +283,6 @@ def predict_outcome(training_data, player1, player2, start_year, end_year, ranki
         player1_rank = get_ranking(training_data, rankings, player1)
         player2_rank = get_ranking(training_data, rankings, player2)
         player1_features = player1_estimates + player2_estimates + [win_streak(training_data, player1)] + [head_to_head(training_data, player1, player2)] + [player1_rank] + [player2_rank]
-        print(player1_features)
         p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
         print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
         p2_model = compute_model(training_data, player2)

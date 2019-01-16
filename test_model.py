@@ -2,6 +2,7 @@ from predict import *
 import sys
 
 def check_winner(training_data, row, start, end):
+	"""Helper function for test."""
 	player1 = row['winner_name']
 	player2 = row['loser_name']
 	pred = predict_outcome(training_data, player1, player2, start, end, rankings)
@@ -11,6 +12,7 @@ def check_winner(training_data, row, start, end):
 
 
 def test(player, start, end, predict_year):
+	"""Returns the accuracy of PLAYER's model when trained on years START to END and tested on PREDICT_YEAR."""
 	training_data = get_training_data(start, end=end)
 	predict_data = get_training_data(predict_year, end=predict_year)
 	player_pred_data = get_matches_for_player(predict_data, player)
