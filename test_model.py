@@ -4,7 +4,7 @@ import sys
 def check_winner(training_data, row, start, end):
 	player1 = row['winner_name']
 	player2 = row['loser_name']
-	pred = predict_outcome(training_data, player1, player2, start, end)
+	pred = predict_outcome(training_data, player1, player2, start, end, rankings)
 	if pred == row['winner_name']:
 		return 1
 	return 0
@@ -29,4 +29,5 @@ if __name__ == "__main__":
     	end_year = int(sys.argv[3])
     	if len(sys.argv) > 4:
     		predict_year = int(sys.argv[4])
+    rankings = pd.read_csv(Path('./data/atp_rankings_current.csv'))
     test(player, start_year, end_year, predict_year)

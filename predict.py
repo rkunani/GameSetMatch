@@ -18,7 +18,8 @@ def clean_data(data):
         data.drop(drop_cols, axis=1, inplace=True)
     missing_match_stats = data[data['w_ace'].isnull()]
     data.drop(missing_match_stats.index, axis=0, inplace=True)
-    #data['tourney_date'] = pd.to_datetime(data['tourney_date'].apply(lambda date: str(date)))
+    data['winner_rank'].replace(to_replace=np.NaN, value=data['winner_rank'].max(), inplace=True)
+    data['loser_rank'].replace(to_replace=np.NaN, value=data['loser_rank'].max(), inplace=True)
     data['tourney_date'] = pd.to_datetime(data['tourney_date'])
     return data
 
@@ -141,6 +142,19 @@ def add_player_v_opponent_stats(data, player):
         data['opp_'+stat] = pd.Series(opp_stat_list, index=data.index)
     return data
 
+def add_player_v_opponent_rankings(data, player):
+    player_ranks = []
+    opp_ranks = []
+    for i in range(data.shape[0]):
+        if data['winner_name'].iloc[i] == player:
+            player_ranks.append(data['winner_rank'].iloc[i])
+            opp_ranks.append(data['loser_rank'].iloc[i])
+        else:
+            player_ranks.append(data['loser_rank'].iloc[i])
+            opp_ranks.append(data['winner_rank'].iloc[i])
+    data['player_rank'] = pd.Series(player_ranks, index=data.index)
+    data['opp_rank'] = pd.Series(opp_ranks, index=data.index)
+    return data
 
 ##########################
 ### FEATURE ESTIMATION ###
@@ -171,6 +185,16 @@ def win_streak(data, player):
     #print(results)
     return compute_win_streak(results)
 
+def get_ranking(training_data, rankings, player):
+    player_data = get_matches_for_player(training_data, player)
+    player_wins = player_data[player_data['winner_name'] == player]
+    player_losses = player_data[player_data['loser_name'] == player]
+    if player_wins.shape[0] > 0:
+        player_id = player_wins['winner_id'].iloc[0]
+    elif player_losses.shape[0] > 0:
+        player_id = player_losses['loser_id'].iloc[0]
+    player_ranks = rankings[rankings['player_id'] == player_id]
+    return player_ranks['rank'].mean()
 
 #####################
 ### MODEL FITTING ###
@@ -178,7 +202,7 @@ def win_streak(data, player):
 
 features = ['player_ace%', 'player_df%', 'player_1stIn%', 'player_1stWon%', 'player_2ndWon%', 'player_bpSaved%', 'player_bpFaced%',
             'opp_ace%', 'opp_df%', 'opp_1stIn%', 'opp_1stWon%', 'opp_2ndWon%', 'opp_bpSaved%', 'opp_bpFaced%', 'win_streak',
-            'head_to_head']#, 'opponent_hand_L', 'opponent_hand_R']  
+            'head_to_head', 'player_rank', 'opp_rank']#, 'opponent_hand_L', 'opponent_hand_R']  
 
 def process_data(data, player):
     """Executes the feature engineering process on DATA by applying the necessary transformations."""
@@ -191,6 +215,7 @@ def process_data(data, player):
             .pipe(add_head_to_head, (player))
             .pipe(add_opponent_hand, (player))
             .pipe(add_player_v_opponent_stats, (player))
+            .pipe(add_player_v_opponent_rankings, (player))
             .fillna(value=0, axis=1)
     )
     return X
@@ -251,22 +276,26 @@ def decide_winner(player1, player2, p1_win_prob, p2_win_prob):
             print(f"{player2} will defeat {player1}.")
             return player2
 
-def predict_outcome(training_data, player1, player2, start_year, end_year):
+def predict_outcome(training_data, player1, player2, start_year, end_year, rankings):
     """Predicts the outcome of a match between PLAYER1 and PLAYER2"""
     try:
         p1_model = compute_model(training_data, player1)
         player1_estimates = [get_estimate(training_data, stat, player1) for stat in features[:7]]
         player2_estimates = [get_estimate(training_data, stat, player2) for stat in features[:7]]
-        player1_features = player1_estimates + player2_estimates + [win_streak(training_data, player1)] + [head_to_head(training_data, player1, player2)]
+        player1_rank = get_ranking(training_data, rankings, player1)
+        player2_rank = get_ranking(training_data, rankings, player2)
+        player1_features = player1_estimates + player2_estimates + [win_streak(training_data, player1)] + [head_to_head(training_data, player1, player2)] + [player1_rank] + [player2_rank]
+        print(player1_features)
         p1_win_prob = p1_model.predict_proba(np.reshape(player1_features, (1, -1)))[0][1]
         print(f"{player1}'s model predicts that {player1} has a {p1_win_prob} chance of winning against {player2}.")
         p2_model = compute_model(training_data, player2)
-        player2_features = player2_estimates + player1_estimates + [win_streak(training_data, player2)] + [head_to_head(training_data, player2, player1)]
+        player2_features = player2_estimates + player1_estimates + [win_streak(training_data, player2)] + [head_to_head(training_data, player2, player1)] + [player2_rank] + [player1_rank]
         p2_win_prob = p2_model.predict_proba(np.reshape(player2_features, (1, -1)))[0][1]
         print(f"{player2}'s model predicts that {player2} has a {p2_win_prob} chance of winning against {player1}.")
         return decide_winner(player1, player2, p1_win_prob, p2_win_prob)
-    except ValueError: # The training data does not capture both wins and losses for either PLAYER1 or PLAYER2
-        print(f"There is not sufficient data to predict the outcome of the match between {player1} and {player2}")
+    except ValueError:
+        print(f"Insufficient data to determine the winner of {player1} vs {player2}")
+
 
 if __name__ == "__main__":
     player1 = sys.argv[1]
@@ -276,4 +305,6 @@ if __name__ == "__main__":
         end_year = 2018
         if len(sys.argv) > 4:
             end_year = int(sys.argv[4])
-    predict_outcome(get_training_data(start_year, end=end_year), player1, player2, start_year, end_year)
+    training_data = get_training_data(start_year, end=end_year)
+    rankings = pd.read_csv(Path('./data/atp_rankings_current.csv'))
+    predict_outcome(training_data, player1, player2, start_year, end_year, rankings)
