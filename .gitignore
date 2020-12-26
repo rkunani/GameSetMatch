@@ -1,5 +1,8 @@
+# Misc
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+
+# Intermediate files
 cleaned_data.hdf
 fed_2018.hdf
